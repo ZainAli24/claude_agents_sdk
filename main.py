@@ -1,5 +1,5 @@
 import asyncio
-from claude_agent_sdk import query, ResultMessage, AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, TextBlock
+from claude_agent_sdk import query, ResultMessage, AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, TextBlock, StreamEvent
 
 
 
@@ -201,49 +201,98 @@ from claude_agent_sdk import query, ResultMessage, AssistantMessage, ClaudeAgent
 
 ## Streaming Input - async generator to stream input to the agent in real-time:
 # // Author: Zain Ali
-async def main():
+# async def main():
 
-    async def generator_input():
-        yield {
-            "type": "user", 
-            "message": {
-                "role": "user", 
-                "content": "Hi my name is Zain and I am from Pakistan!"
-            }
-        }
+#     async def generator_input():
+#         yield {
+#             "type": "user", 
+#             "message": {
+#                 "role": "user", 
+#                 "content": "Hi my name is Zain and I am from Pakistan!"
+#             }
+#         }
 
-        await asyncio.sleep(2)
+#         await asyncio.sleep(2)
 
-        yield {
-            "type": "user",
-            "message": {
-                "role": "user",
-                "content": "This is my request 2 , IN streaming input in claude agent sdk had qeury function second time call to process this second reponse?"
-            }
-        }
-
-
-    options = ClaudeAgentOptions(allowed_tools=["Read", "Glob", "Edit", "Write", "Bash"], max_turns=10)
-
-    async with ClaudeSDKClient(options) as client:
-        await client.query(generator_input())
-
-        turn = 0
-        while True:
-            try:
-                async with asyncio.timeout(30.0):
-                    async for message in client.receive_response():
-                        if isinstance(message, AssistantMessage):
-                            for block in message.content:
-                                if isinstance(block, TextBlock):
-                                    print("\n\n [=] RESPONSE:", block.text)
-                        elif isinstance(message, ResultMessage) and message.subtype == "success":
-                            turn += 1
-                            print(f"\n\n [=] Turn {turn} completed!")
-            except (asyncio.TimeoutError, StopAsyncIteration):
-                break
+#         yield {
+#             "type": "user",
+#             "message": {
+#                 "role": "user",
+#                 "content": "This is my request 2 , IN streaming input in claude agent sdk had qeury function second time call to process this second reponse?"
+#             }
+#         }
 
 
+#     options = ClaudeAgentOptions(allowed_tools=["Read", "Glob", "Edit", "Write", "Bash"], max_turns=10)
 
-asyncio.run(main())
+#     async with ClaudeSDKClient(options) as client:
+#         await client.query(generator_input())
+
+#         turn = 0
+#         while True:
+#             try:
+#                 async with asyncio.timeout(30.0):
+#                     async for message in client.receive_response():
+#                         if isinstance(message, AssistantMessage):
+#                             for block in message.content:
+#                                 if isinstance(block, TextBlock):
+#                                     print("\n\n [=] RESPONSE:", block.text)
+#                         elif isinstance(message, ResultMessage) and message.subtype == "success":
+#                             turn += 1
+#                             print(f"\n\n [=] Turn {turn} completed!")
+#             except (asyncio.TimeoutError, StopAsyncIteration):
+#                 break
+
+
+
+# asyncio.run(main())
+
+
+
+#------------------------------------------------------
+
+
+## Streaming Output - real-time streaming of agent's response:
+async def streaming_output():
+    options = ClaudeAgentOptions(
+        allowed_tools=["Read", "Write", "Edit", "Glob", "Bash"],
+        include_partial_messages=True
+    )
+
+
+    tool_Name = None
+    tool_inputs = None
+
+    async for message in query(prompt="Read main.py then Create 10 lines Ai funny story!", options=options):
+        if isinstance(message, StreamEvent):
+            event = message.event
+            if event.get("type") == "content_block_start":
+                content_block = event.get("content_block")
+                if content_block.get("type") == "tool_use":
+                    tool_Name = content_block.get("name")
+                    tool_inputs = ""
+                    print(f"\n\n [!] Claude Agent Calling {tool_Name} Tool")
+            elif event.get("type") == "content_block_delta":
+                delta = event.get("delta", {})
+                if delta.get("type") == "input_json_delta":
+                    tool_input = delta.get("partial_json", {})
+                    print("[*] TOOL Input:", tool_input)
+                    tool_inputs += tool_input
+            elif event.get("type") == "message_delta":
+                delta = event.get("delta", {})
+                if delta.get("stop_reason") == "tool_use":
+                    print(f"Tool *[{tool_Name}]* Calling with this input: {tool_inputs}")
+            if event.get("type") == "content_block_delta":
+                delta = event.get("delta", {})
+                if delta.get("type") == "text_delta":
+                    print("\n\n")
+                    print(delta.get("text", ""), end="", flush=True)
+
+            
+
+asyncio.run(streaming_output())
+
+
+
+# ------------------------------------------------------------------------------
 
