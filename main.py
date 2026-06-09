@@ -58,7 +58,10 @@ from claude_agent_sdk import query, ResultMessage, AssistantMessage, ClaudeAgent
 
 # -------------------------
 
-# !) Manage Session and Context: maintain a conversation with context across multiple queries.
+# <---------  !) Manage Session and Context: maintain a conversation with context across multiple queries. --------->
+
+# 1) session manage with ClaudeSDKClient:
+
 # async def main():
 
 #     options = ClaudeAgentOptions(
@@ -121,6 +124,10 @@ from claude_agent_sdk import query, ResultMessage, AssistantMessage, ClaudeAgent
 
 
 
+# -------------------------------
+
+
+
 
 # # 3. Session manage with Fork feature:
 # async def main():
@@ -157,32 +164,86 @@ from claude_agent_sdk import query, ResultMessage, AssistantMessage, ClaudeAgent
 
 
 
-# ------------
+
+# -------------------
+
+
 
 
 # 4. Continue_conversation with most recent session:
-async def main():
-    async for message in query(
-        prompt="Add only multiplication function in addition.py file without error handling!",
-        options=ClaudeAgentOptions(allowed_tools=["Read", "Bash", "Write", "Edit", "Glob"])
-    ):
-        if isinstance(message, ResultMessage) and message.subtype == "success":
-            print("\n\n RESPONSE 1:" , message.result)
-            print("\n\n SESSION ID:", message.session_id)
+# async def main():
+#     async for message in query(
+#         prompt="Add only multiplication function in addition.py file without error handling!",
+#         options=ClaudeAgentOptions(allowed_tools=["Read", "Bash", "Write", "Edit", "Glob"])
+#     ):
+#         if isinstance(message, ResultMessage) and message.subtype == "success":
+#             print("\n\n RESPONSE 1:" , message.result)
+#             print("\n\n SESSION ID:", message.session_id)
 
     
-    async for message in query(
-        prompt="Add error handling in it", 
-        options=ClaudeAgentOptions(allowed_tools=["Read", "Write", "Edit", "Bash", "Glob"], continue_conversation=True)
-    ):
-        if isinstance(message, ResultMessage) and message.subtype == "success":
-            print("\n\n RESPONSE 2:" , message.result)
-            print("\n\n SESSION ID 2:", message.session_id)
+#     async for message in query(
+#         prompt="Add error handling in it", 
+#         options=ClaudeAgentOptions(allowed_tools=["Read", "Write", "Edit", "Bash", "Glob"], continue_conversation=True)
+#     ):
+#         if isinstance(message, ResultMessage) and message.subtype == "success":
+#             print("\n\n RESPONSE 2:" , message.result)
+#             print("\n\n SESSION ID 2:", message.session_id)
 
+
+
+
+# asyncio.run(main())
+
+
+             
+# --------------
+
+
+## Streaming Input - async generator to stream input to the agent in real-time:
+# // Author: Zain Ali
+async def main():
+
+    async def generator_input():
+        yield {
+            "type": "user", 
+            "message": {
+                "role": "user", 
+                "content": "Hi my name is Zain and I am from Pakistan!"
+            }
+        }
+
+        await asyncio.sleep(2)
+
+        yield {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": "This is my request 2 , IN streaming input in claude agent sdk had qeury function second time call to process this second reponse?"
+            }
+        }
+
+
+    options = ClaudeAgentOptions(allowed_tools=["Read", "Glob", "Edit", "Write", "Bash"], max_turns=10)
+
+    async with ClaudeSDKClient(options) as client:
+        await client.query(generator_input())
+
+        turn = 0
+        while True:
+            try:
+                async with asyncio.timeout(30.0):
+                    async for message in client.receive_response():
+                        if isinstance(message, AssistantMessage):
+                            for block in message.content:
+                                if isinstance(block, TextBlock):
+                                    print("\n\n [=] RESPONSE:", block.text)
+                        elif isinstance(message, ResultMessage) and message.subtype == "success":
+                            turn += 1
+                            print(f"\n\n [=] Turn {turn} completed!")
+            except (asyncio.TimeoutError, StopAsyncIteration):
+                break
 
 
 
 asyncio.run(main())
 
-
-             
